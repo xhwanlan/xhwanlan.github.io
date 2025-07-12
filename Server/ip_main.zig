@@ -25,7 +25,29 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
 
     var request = server.receiveHead() catch return;
 
-    const ip = @as(*const [4]u8, @ptrCast(&connection.address.in.sa.addr));
+    var addr: [15]u8 = undefined;
+    var ip: ?[]const u8 = result: {
+        var it = request.iterateHeaders();
+        while (it.next()) |header| {
+            if (std.ascii.eqlIgnoreCase(header.name, "Cf-Connecting-Ip")) {
+                break :result header.value;
+            }
+        }
+        break :result null;
+    };
+
+    if (ip == null) {
+        const inAddr = @as(*const [4]u8, @ptrCast(&connection.address.in.sa.addr));
+        const inAddrStr = std.fmt.allocPrint(allocator, "{}.{}.{}.{}", .{ inAddr[0], inAddr[1], inAddr[2], inAddr[3] }) catch return;
+        defer allocator.free(inAddrStr);
+
+        for (inAddrStr, 0..) |byte, index| {
+            addr[index] = byte;
+        }
+
+        ip = addr[0..inAddrStr.len];
+    }
+
     const html = std.fmt.allocPrint(allocator,
         \\<!DOCTYPE html>
         \\<html lang="en">
@@ -64,10 +86,10 @@ fn handleConnection(allocator: std.mem.Allocator, connection: std.net.Server.Con
         \\  </style>
         \\</head>
         \\<body>
-        \\  <div class="ip-container">{}.{}.{}.{}</div>
+        \\  <div class="ip-container">{s}</div>
         \\</body>
         \\</html>
-    , .{ ip[0], ip[1], ip[2], ip[3] }) catch return;
+    , .{ip.?}) catch return;
     defer allocator.free(html);
 
     request.respond(html, .{}) catch return;
