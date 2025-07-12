@@ -12,10 +12,10 @@ pub fn main() !void {
     defer server.deinit();
 
     while (true) {
-        const conn = try server.accept();
-        defer conn.stream.close();
+        const connection = try server.accept();
+        defer connection.stream.close();
 
-        handleConnection(allocator, conn);
+        handleConnection(allocator, connection);
     }
 }
 
